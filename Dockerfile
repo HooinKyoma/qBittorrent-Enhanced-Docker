@@ -34,7 +34,7 @@ ENV TRACKERS_LIST_URL=https://jsd.cdn.zzko.cn/gh/XIU2/TrackersListCollection/bes
 ENV TZ=Asia/Shanghai
 ENV WEBUIPORT=8989
 ENV PUID=1000
-ENV PGID=1000
+ENV PGID=100
 ENV UMASK=022
 
 COPY root /
