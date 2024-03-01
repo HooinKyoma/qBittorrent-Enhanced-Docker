@@ -1,23 +1,20 @@
-FROM alpine:3.13 as compilingqB
+FROM alpine:3.19 as compilingqB
 
 #compiling qB
 
-ARG  LIBTORRENT_VER=1.1.14
-ARG  QBITTORRENT_VER=4.2.5.10
+ARG  LIBTORRENT_VER=1.2.19
+ARG  QBITTORRENT_VER=4.6.3.10
 
 RUN  apk add --no-cache ca-certificates make g++ gcc qt5-qtsvg-dev boost-dev qt5-qttools-dev file qt5-qtbase-dev \
 &&   mkdir /qbtorrent \
-# &&   wget -P /qbtorrent https://github.com/arvidn/libtorrent/releases/download/libtorrent-${LIBTORRENT_VER}/libtorrent-rasterbar-${LIBTORRENT_VER}.tar.gz \
-&&   wget -P /qbtorrent https://github.com/arvidn/libtorrent/releases/download/libtorrent-`echo "$LIBTORRENT_VER"|sed 's#\.#_#g'`/libtorrent-rasterbar-${LIBTORRENT_VER}.tar.gz \
-#&&   wget -P /qbtorrent https://github.com/arvidn/libtorrent/releases/download/libtorrent_`echo "$LIBTORRENT_VER"|sed 's#\.#_#g'`/libtorrent-rasterbar-${LIBTORRENT_VER}.tar.gz \
+#&&   wget -P /qbtorrent https://github.com/arvidn/libtorrent/releases/download/libtorrent-`echo "$LIBTORRENT_VER"|sed 's#\.#_#g'`/libtorrent-rasterbar-${LIBTORRENT_VER}.tar.gz \
+&&   wget -P /qbtorrent https://github.com/arvidn/libtorrent/releases/download/v${LIBTORRENT_VER}/libtorrent-rasterbar-${LIBTORRENT_VER}.tar.gz \
 &&   tar -zxvf /qbtorrent/libtorrent-rasterbar-${LIBTORRENT_VER}.tar.gz -C /qbtorrent \
 &&   cd /qbtorrent/libtorrent-rasterbar-${LIBTORRENT_VER} \
-# &&   if [ "$(uname -m)" = "x86_64" ];then host=x86_64-alpine-linux-musl;elif [ "$(uname -m)" = "aarch64" ];then host=aarch64-alpine-linux-musl;elif [ "$(uname -m)" = "armv7l" ];then host=armv7-alpine-linux-musleabihf; fi \
-# &&   echo $host \
 &&   ./configure --host=x86_64-alpine-linux-musl \
 &&   make install-strip -j$(nproc) \
 #qBittorrent-Enhanced-Edition
-&&   wget -P /qbtorrent https://github.com/c0re100/qBittorrent-Enhanced-Edition/archive/release-${QBITTORRENT_VER}.zip \
+&&   wget -P /qbtorrent https://github.com/c0re100/qBittorrent-Enhanced-Edition/archive/refs/tags/release-${QBITTORRENT_VER}.zip \
 &&   unzip /qbtorrent/release-${QBITTORRENT_VER}.zip -d /qbtorrent \
 &&   cd /qbtorrent/qBittorrent-Enhanced-Edition-release-${QBITTORRENT_VER} \
 &&   ./configure --disable-gui --host=x86_64-alpine-linux-musl \
@@ -28,9 +25,9 @@ RUN  apk add --no-cache ca-certificates make g++ gcc qt5-qtsvg-dev boost-dev qt5
 &&   cp --parents /usr/local/bin/qbittorrent-nox /qbittorrent
 
  # docker qB
-FROM alpine:3.13
+FROM alpine:3.19
 
-ARG  S6_VER=2.2.0.3
+ARG  S6_VER=3.1.6.2
 
 ENV TRACKERSAUTO=true
 ENV TRACKERS_LIST_URL=https://jsd.cdn.zzko.cn/gh/XIU2/TrackersListCollection/best.txt
@@ -44,11 +41,14 @@ COPY root /
 COPY --from=compilingqB /qbittorrent /
 
 #install bash curl tzdata python3 shadow qt6
-RUN apk add --no-cache bash curl ca-certificates tzdata python3 shadow qt5-qtbase-sqlite qt5-qtbase libexecinfo \
+#RUN apk add --no-cache bash curl ca-certificates tzdata python3 shadow qt5-qtbase-sqlite qt5-qtbase libexecinfo \
+RUN apk add --no-cache bash curl ca-certificates tzdata python3 shadow qt5-qtbase-sqlite qt5-qtbase \
 #install s6-overlay
-&& if [ "$(uname -m)" = "x86_64" ];then s6_arch=amd64;elif [ "$(uname -m)" = "aarch64" ];then s6_arch=aarch64;elif [ "$(uname -m)" = "armv7l" ];then s6_arch=arm; fi \
-&& wget --no-check-certificate https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-${s6_arch}.tar.gz \
-&& tar -xvzf s6-overlay-${s6_arch}.tar.gz \
+&& if [ "$(uname -m)" = "x86_64" ];then s6_arch=x86_64;elif [ "$(uname -m)" = "aarch64" ];then s6_arch=aarch64;elif [ "$(uname -m)" = "armv7l" ];then s6_arch=arm; fi \
+&& wget --no-check-certificate https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-${s6_arch}.tar.xz \
+&& wget --no-check-certificate https://github.com/just-containers/s6-overlay/releases/download/v${S6_VER}/s6-overlay-noarch.tar.xz \
+&& tar -C / -Jxpf s6-overlay-${s6_arch}.tar.xz \
+&& tar -C / -Jxpf s6-overlay-noarch.tar.xz \
 #create qbittorrent user
 && useradd -u 1000 -U -d /config -s /bin/false qbittorrent \
 && usermod -G users qbittorrent \
@@ -64,7 +64,8 @@ RUN apk add --no-cache bash curl ca-certificates tzdata python3 shadow qt5-qtbas
 && sed -i '/Bittorrent\\TrackersList=/r /tmp/Newtrackers.txt' /usr/local/qbittorrent/defaults/qBittorrent.conf \
 && sed -i '1,/^Bittorrent\\TrackersList=.*/{//d;}' /usr/local/qbittorrent/defaults/qBittorrent.conf \
 #clear
-&& rm s6-overlay-${s6_arch}.tar.gz \
+&& rm s6-overlay-${s6_arch}.tar.xz \
+&& rm s6-overlay-noarch.tar.xz \
 && rm -rf /var/cache/apk/* /tmp/* \
 && chmod a+x /usr/local/qbittorrent/updatetrackers.sh \
 && chmod a+x /usr/local/bin/qbittorrent-nox
